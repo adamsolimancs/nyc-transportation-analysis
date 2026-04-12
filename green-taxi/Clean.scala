@@ -1,2 +1,0 @@
-// Data cleaning - to avoid nasty exceptions later on in your analytic.
-// Drop columns you do not need, add columns with uniform values (if needed), drop rows if they are NULL if you decide they aren't to be included.
