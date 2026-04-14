@@ -7,8 +7,11 @@ import org.apache.spark.sql.{Column, DataFrame, Row, SparkSession}
 import org.apache.spark.sql.functions.{asc, avg, col, date_format, desc, lit, stddev}
 import org.apache.spark.sql.types.{DataType, DoubleType, LongType, TimestampType}
 
-object EDA {
-  private val DefaultInputPath = Paths.get("yellow_taxi", "data").toString
+object FirstCode {
+  private val DefaultHdfsUri = "hdfs://nyu-dataproc-m"
+  private val DefaultUser = System.getProperty("user.name")
+  private val DefaultInputPath = s"$DefaultHdfsUri/user/$DefaultUser/hw7/data"
+  private val DefaultOutputPath = s"$DefaultHdfsUri/user/$DefaultUser/hw7_clean"
   private val TimestampPattern = "yyyy-MM-dd HH:mm:ss"
 
   private val RequiredColumns = Seq(
@@ -33,13 +36,14 @@ object EDA {
     // build spark sesh
     val spark = SparkSession
       .builder()
-      .appName("YellowTaxiEDA")
+      .appName("FirstCode")
       .getOrCreate()
 
     spark.sparkContext.setLogLevel("ERROR")
 
     // get data from command line args, error check
     val inputPath = if (args.nonEmpty) args(0) else DefaultInputPath
+    val outputPath = if (args.length > 1) args(1) else DefaultOutputPath
     val parquetPaths = resolveParquetPaths(spark, inputPath)
 
     require(parquetPaths.nonEmpty, s"No parquet files found at $inputPath")
@@ -53,6 +57,7 @@ object EDA {
 
     // output:
     println(s"Input path: $inputPath")
+    println(s"Output path: $outputPath")
     println(s"Records loaded: $recordCount")
     println()
     println("Summary statistics:")
@@ -61,6 +66,10 @@ object EDA {
     println()
     println("Preview with normalized datetimes and trip_time_length:")
     enrichedDf.show(20, truncate = false)
+
+    enrichedDf.write
+      .mode("overwrite")
+      .parquet(outputPath)
 
     taxiDf.unpersist()
     spark.stop()
