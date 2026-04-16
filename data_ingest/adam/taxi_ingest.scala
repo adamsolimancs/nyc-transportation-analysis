@@ -147,7 +147,7 @@ object taxi_ingest {
   }
 
   private def selectColumns(df: DataFrame, specs: Seq[ColumnSpec]): DataFrame =
-    df.select(specs.map(spec => castOrNull(df, spec.name, spec.dataType).as(spec.name))*)
+    df.select(specs.map(spec => castOrNull(df, spec.name, spec.dataType).as(spec.name)): _*)
 
   private def castOrNull(df: DataFrame, columnName: String, dataType: DataType): Column =
     if (df.columns.contains(columnName)) col(columnName).cast(dataType)
