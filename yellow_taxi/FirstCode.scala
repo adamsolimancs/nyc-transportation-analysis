@@ -1,18 +1,20 @@
 import java.nio.file.{Files, Paths}
 
 import scala.collection.JavaConverters._
+import scala.util.Try
 
-import org.apache.hadoop.fs.{FileSystem, Path => HadoopPath}
+import org.apache.hadoop.fs.{Path => HadoopPath}
 import org.apache.spark.sql.{Column, DataFrame, Row, SparkSession}
-import org.apache.spark.sql.functions.{asc, avg, col, date_format, desc, lit, stddev}
+import org.apache.spark.sql.functions.{avg, col, count, date_format, lit, stddev, sum, when}
 import org.apache.spark.sql.types.{DataType, DoubleType, LongType, TimestampType}
 
 object FirstCode {
   private val DefaultHdfsUri = "hdfs://nyu-dataproc-m"
   private val DefaultUser = System.getProperty("user.name")
-  private val DefaultInputPath = s"$DefaultHdfsUri/user/$DefaultUser/hw7/data"
+  private val DefaultInputPath = "/user/aes10130_nyu_edu/hw7/data"
   private val DefaultOutputPath = s"$DefaultHdfsUri/user/$DefaultUser/hw7_clean"
   private val TimestampPattern = "yyyy-MM-dd HH:mm:ss"
+  private val DefaultPreviewRows = 0
 
   private val RequiredColumns = Seq(
     ColumnSpec("tpep_pickup_datetime", TimestampType),
@@ -31,9 +33,11 @@ object FirstCode {
     "passenger_count",
     "trip_distance"
   )
+  private val FrequentItemSupport = 1e-4
+  private val QuantileRelativeError = 0.01
+  private val MaxModeCandidatesPerColumn = 32
 
   def main(args: Array[String]): Unit = {
-    // build spark sesh
     val spark = SparkSession
       .builder()
       .appName("FirstCode")
@@ -41,92 +45,113 @@ object FirstCode {
 
     spark.sparkContext.setLogLevel("ERROR")
 
-    // get data from command line args, error check
     val inputPath = if (args.nonEmpty) args(0) else DefaultInputPath
     val outputPath = if (args.length > 1) args(1) else DefaultOutputPath
-    val parquetPaths = resolveParquetPaths(spark, inputPath)
+    val previewRows = parsePreviewRows(args)
 
-    require(parquetPaths.nonEmpty, s"No parquet files found at $inputPath")
-
-    // Run helper functions for each individual tasks
-    val taxiDf = selectRequiredColumns(spark.read.parquet(parquetPaths: _*)).cache()
-    val recordCount = taxiDf.count()
-    val columnStats = computeColumnStats(taxiDf)
-    val totalAmountStdDev = computeTotalAmountStdDev(taxiDf)
+    val taxiDf = readRequiredColumns(spark, inputPath)
+    val summary = computeDatasetSummary(taxiDf)
     val enrichedDf = addDerivedColumns(taxiDf)
 
-    // output:
     println(s"Input path: $inputPath")
     println(s"Output path: $outputPath")
-    println(s"Records loaded: $recordCount")
+    println(s"Records loaded: ${summary.recordCount}")
     println()
     println("Summary statistics:")
-    columnStats.foreach(printColumnStats)
-    println(s"total_amount standard deviation = $totalAmountStdDev")
-    println()
-    println("Preview with normalized datetimes and trip_time_length:")
-    enrichedDf.show(20, truncate = false)
+    summary.columnStats.foreach(printColumnStats)
+    println(s"total_amount standard deviation = ${summary.totalAmountStdDev}")
+
+    if (previewRows > 0) {
+      println()
+      println(s"Preview with normalized datetimes and trip_time_length ($previewRows rows):")
+      enrichedDf.show(previewRows, truncate = false)
+    }
 
     enrichedDf.write
       .mode("overwrite")
       .parquet(outputPath)
 
-    taxiDf.unpersist()
     spark.stop()
   }
 
-  /*
-  * Helper Functions
-  */
+  private def readRequiredColumns(spark: SparkSession, inputPath: String): DataFrame = {
+    val readPaths = resolveReadPaths(spark, inputPath)
+    require(readPaths.nonEmpty, s"No parquet files found at $inputPath")
+
+    selectRequiredColumns(spark.read.parquet(readPaths: _*))
+  }
 
   private def selectRequiredColumns(df: DataFrame): DataFrame =
     df.select(RequiredColumns.map(spec => castOrNull(df, spec.name, spec.dataType).as(spec.name)): _*)
 
-  private def computeColumnStats(df: DataFrame): Seq[ColumnStats] = {
-    // create list of spark agg expressiosn to compute the mean of each numeric col
-    val meanExpressions = NumericColumns.map(name => avg(col(name)).as(name))
-    val meanRow = df.agg(meanExpressions.head, meanExpressions.tail: _*).first()
-    val medians = df.stat.approxQuantile(NumericColumns.toArray, Array(0.5), 0.0)
+  private def computeDatasetSummary(df: DataFrame): DatasetSummary = {
+    val meanExpressions = NumericColumns.map(name => avg(col(name)).as(meanAlias(name)))
+    val aggregateExpressions =
+      Seq(count(lit(1)).as("record_count"), stddev(col("total_amount")).as("total_amount_stddev")) ++ meanExpressions
+    val aggregateRow = df.agg(aggregateExpressions.head, aggregateExpressions.tail: _*).first()
+    val medians = df.stat.approxQuantile(NumericColumns.toArray, Array(0.5), QuantileRelativeError)
+    val modes = computeModes(df)
 
-    // create (col,index) pairs and map them to ColumnStats.
-    // use case to destructure result of zipWithIndex (col, index)
-    NumericColumns.zipWithIndex.map { case (columnName, index) =>
+    val columnStats = NumericColumns.zipWithIndex.map { case (columnName, index) =>
       ColumnStats(
         columnName = columnName,
-        mean = rowDoubleOrNaN(meanRow, index),
+        mean = rowDoubleOrNaN(aggregateRow, meanAlias(columnName)),
         median = medians(index).headOption.getOrElse(Double.NaN),
-        mode = computeMode(df, columnName).getOrElse(Double.NaN)
+        mode = modes.getOrElse(columnName, Double.NaN)
       )
     }
+
+    DatasetSummary(
+      recordCount = rowLongOrZero(aggregateRow, "record_count"),
+      columnStats = columnStats,
+      totalAmountStdDev = rowDoubleOrNaN(aggregateRow, "total_amount_stddev")
+    )
   }
 
-  private def computeMode(df: DataFrame, columnName: String): Option[Double] =
-    df.where(col(columnName).isNotNull)
-      .groupBy(col(columnName))
-      .count()
-      .orderBy(desc("count"), asc(columnName))
-      .limit(1)
-      .collect()
-      .headOption
-      .map(_.getDouble(0))
+  private def computeModes(df: DataFrame): Map[String, Double] = {
+    val frequentItemsRow = df.stat.freqItems(NumericColumns, FrequentItemSupport).first()
 
-  private def computeTotalAmountStdDev(df: DataFrame): Double =
-    {
-      val stdDevRow = df.agg(stddev(col("total_amount")).as("total_amount_stddev")).first()
-      rowDoubleOrNaN(stdDevRow, stdDevRow.fieldIndex("total_amount_stddev"))
+    val modeCandidates = NumericColumns.flatMap { columnName =>
+      val fieldIndex = frequentItemsRow.fieldIndex(s"${columnName}_freqItems")
+      frequentItemsRow.getSeq[Any](fieldIndex)
+        .collect {
+          case number: java.lang.Number if !java.lang.Double.isNaN(number.doubleValue()) =>
+            number.doubleValue()
+        }
+        .distinct
+        .take(MaxModeCandidatesPerColumn)
+        .zipWithIndex
+        .map { case (candidateValue, index) =>
+          ModeCandidate(columnName, candidateValue, s"${columnName}_mode_candidate_$index")
+        }
     }
 
-  // add new column 'trip_time_length' and format dates in the datetime columns. 
-  // Also do basic clean (cast or null).
+    if (modeCandidates.isEmpty) {
+      return Map.empty
+    }
+
+    val countExpressions = modeCandidates.map { candidate =>
+      sum(when(col(candidate.columnName) === lit(candidate.candidateValue), 1L).otherwise(0L))
+        .cast(LongType)
+        .as(candidate.alias)
+    }
+    val countRow = df.agg(countExpressions.head, countExpressions.tail: _*).first()
+
+    modeCandidates
+      .groupBy(_.columnName)
+      .flatMap { case (columnName, candidates) =>
+        candidates
+          .map(candidate => candidate -> rowLongOrZero(countRow, candidate.alias))
+          .filter { case (_, candidateCount) => candidateCount > 0L }
+          .sortBy { case (candidate, candidateCount) => (-candidateCount, candidate.candidateValue) }
+          .headOption
+          .map { case (candidate, _) => columnName -> candidate.candidateValue }
+      }
+      .toMap
+  }
+
   private def addDerivedColumns(df: DataFrame): DataFrame =
-    df.withColumn("tpep_pickup_datetime", col("tpep_pickup_datetime").cast(TimestampType))
-      .withColumn("tpep_dropoff_datetime", col("tpep_dropoff_datetime").cast(TimestampType))
-      .withColumn("fare_amount", col("fare_amount").cast(DoubleType))
-      .withColumn("tip_amount", col("tip_amount").cast(DoubleType))
-      .withColumn("total_amount", col("total_amount").cast(DoubleType))
-      .withColumn("passenger_count", col("passenger_count").cast(DoubleType))
-      .withColumn("trip_distance", col("trip_distance").cast(DoubleType))
-      .na.drop(Seq("tpep_pickup_datetime", "tpep_dropoff_datetime"))
+    df.na.drop(Seq("tpep_pickup_datetime", "tpep_dropoff_datetime"))
       .withColumn(
         "trip_time_length",
         col("tpep_dropoff_datetime").cast(LongType) - col("tpep_pickup_datetime").cast(LongType)
@@ -147,7 +172,7 @@ object FirstCode {
     println(s"  mode = ${stats.mode}")
   }
 
-  private def resolveParquetPaths(spark: SparkSession, datasetPath: String): Seq[String] = {
+  private def resolveReadPaths(spark: SparkSession, datasetPath: String): Seq[String] = {
     if (!hasUriScheme(datasetPath)) {
       val localPath = Paths.get(datasetPath)
 
@@ -156,18 +181,7 @@ object FirstCode {
       }
 
       if (Files.isDirectory(localPath)) {
-        val stream = Files.list(localPath)
-
-        try {
-          return stream.iterator().asScala
-            .filter(entry => Files.isRegularFile(entry))
-            .filter(entry => entry.getFileName.toString.endsWith(".parquet"))
-            .map(_.toString)
-            .toSeq
-            .sorted
-        } finally {
-          stream.close()
-        }
+        return listLocalParquetFiles(localPath)
       }
     }
 
@@ -177,33 +191,50 @@ object FirstCode {
     require(fs.exists(hadoopPath), s"Dataset path not found: $datasetPath")
 
     if (fs.isFile(hadoopPath)) Seq(hadoopPath.toString)
-    else listParquetFiles(fs, hadoopPath)
+    else Seq(hadoopPath.toString)
   }
 
-  private def listParquetFiles(fs: FileSystem, directory: HadoopPath): Seq[String] = {
-    val files = scala.collection.mutable.ArrayBuffer.empty[String]
-    val iterator = fs.listFiles(directory, false)
+  private def listLocalParquetFiles(directory: java.nio.file.Path): Seq[String] = {
+    val stream = Files.list(directory)
 
-    while (iterator.hasNext) {
-      val status = iterator.next()
-      if (status.isFile && status.getPath.getName.endsWith(".parquet")) {
-        files += status.getPath.toString
-      }
+    try {
+      stream.iterator().asScala
+        .filter(entry => Files.isRegularFile(entry))
+        .filter(entry => entry.getFileName.toString.endsWith(".parquet"))
+        .map(_.toString)
+        .toSeq
+        .sorted
+    } finally {
+      stream.close()
     }
-
-    files.sorted.toSeq
   }
 
   private def hasUriScheme(path: String): Boolean =
     path.matches("^[a-zA-Z][a-zA-Z0-9+.-]*://.*")
 
-  private def rowDoubleOrNaN(row: Row, index: Int): Double =
+  private def meanAlias(columnName: String): String =
+    s"${columnName}_mean"
+
+  private def rowDoubleOrNaN(row: Row, fieldName: String): Double = {
+    val index = row.fieldIndex(fieldName)
     if (row.isNullAt(index)) Double.NaN else row.getDouble(index)
+  }
+
+  private def rowLongOrZero(row: Row, fieldName: String): Long = {
+    val index = row.fieldIndex(fieldName)
+    if (row.isNullAt(index)) 0L else row.getLong(index)
+  }
+
+  private def parsePreviewRows(args: Array[String]): Int =
+    if (args.length > 2) Try(args(2).toInt).toOption.filter(_ >= 0).getOrElse(DefaultPreviewRows)
+    else DefaultPreviewRows
 
   private def castOrNull(df: DataFrame, columnName: String, dataType: DataType): Column =
     if (df.columns.contains(columnName)) col(columnName).cast(dataType)
     else lit(null).cast(dataType)
 
+  private case class ModeCandidate(columnName: String, candidateValue: Double, alias: String)
   private case class ColumnSpec(name: String, dataType: DataType)
   private case class ColumnStats(columnName: String, mean: Double, median: Double, mode: Double)
+  private case class DatasetSummary(recordCount: Long, columnStats: Seq[ColumnStats], totalAmountStdDev: Double)
 }
