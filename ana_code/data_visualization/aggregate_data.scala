@@ -38,6 +38,3 @@ weather_duration.show(100, false)
 
 weather_duration.coalesce(1).write.option("header", "true").mode("overwrite").csv("hdfs:///user/aes10130_nyu_edu/final_project/weather_duration")
 weather_duration.coalesce(1).write.option("header", "true").mode("overwrite").csv("hdfs:///user/aj3556_nyu_edu/final_project/weather_duration")
-
-println("  hdfs dfs -get /user/aes10130_nyu_edu/final_project/taxi_bike_temp")
-println("  hdfs dfs -get /user/aes10130_nyu_edu/final_project/weather_duration")
