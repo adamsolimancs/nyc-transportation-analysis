@@ -115,7 +115,7 @@ val predictions = model.transform(inputDF)
 predictions.select("prediction").show()
 ```
 - For Python, load and run the model using the following code:
-- ```bash
+```bash
 from pyspark.ml import PipelineModel
 model = PipelineModel.load("transport_model_local")
 predictions = model.transform(inputDF)
