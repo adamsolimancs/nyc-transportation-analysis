@@ -2,7 +2,8 @@ import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.functions._
 
 val spark = SparkSession.builder().appName("CoordinateProfiling").getOrCreate()
-val df = spark.read.option("header", "true").option("inferSchema", "true").csv("hdfs:///user/mc9967_nyu_edu/final_project_data/merged_data")
+
+val df = spark.read.parquet("hdfs:///user/mc9967_nyu_edu/final_project_data/merged_data")
 
 val coordStats = df.select(
     min("start_latitude").alias("min_lat"),
