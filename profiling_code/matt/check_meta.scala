@@ -2,7 +2,7 @@ import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.functions._
 
 val spark = SparkSession.builder().appName("MetaCheck").getOrCreate()
-val df = spark.read.option("header", "true").option("inferSchema", "true").csv("hdfs:///user/mc9967_nyu_edu/final_project/*.csv")
+val df = spark.read.option("header", "true").option("inferSchema", "true").csv("hdfs:///user/mc9967_nyu_edu/final_project_data/merged_data")
 
 println(s"Total Records: ${df.count()}")
 
