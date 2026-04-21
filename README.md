@@ -3,7 +3,9 @@
 Input data: 
 
 https://data.cityofnewyork.us/dataset/Citi-Bike-System-Data/vsnr-94wk/about_data
+
 https://www.nyc.gov/site/tlc/about/tlc-trip-record-data.page
+
 https://data.cityofnewyork.us/dataset/Hyperlocal-Temperature-Monitoring/qdq3-9eqn/about_data
 
 HDFS File Locations: 
