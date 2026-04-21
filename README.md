@@ -91,7 +91,30 @@ spark-submit \
 - The merged cleaned dataset is written to `hdfs:///user/aes10130_nyu_edu/final_project/merged_data`.
 - Intermediate and analysis outputs are generally written to user-specific HDFS folders referenced inside each Scala file.
 
-## Where you can find the input data that you used
+## Where you can find the input data that you used: 
 - Taxi input data can be found at: `hdfs:///user/aes10130_nyu_edu/final_project/yellow_taxi_raw`.
 - Bike input data can be found at: 
-- Weather input data can be found at: 
+- Weather input data can be found at:
+
+## How to build/recreate our model: 
+- 
+
+## How to run our model: 
+- Download the transport_model_local folder and model_viz.ipynb, which are located in the ana_code directory
+- Open model_viz.ipynb and ensure that the model_path variable points to your local transport_model_local path
+- Run the notebook and select two points on the map to receive a prediction
+- To test different conditions, locate the handle_click function and modify time_hours, temp_f, season, beaufort_scale, and precipitation_mm in the test_row variable 
+
+Alternatively, to run the model without a visualization, 
+- Download the transport_model_local folder located in the ana_code directory
+- For Spark, load and run the model using the following code:
+import org.apache.spark.ml.PipelineModel
+val model = PipelineModel.load("transport_model_local")
+val predictions = model.transform(inputDF)
+predictions.select("prediction").show()
+- For Python, load and run the model using the following code:
+from pyspark.ml import PipelineModel
+model = PipelineModel.load("transport_model_local")
+predictions = model.transform(inputDF)
+predictions.select("prediction").show()
+
