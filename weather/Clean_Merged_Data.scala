@@ -70,8 +70,9 @@ month_segments.select(
 spark.sql("DROP TABLE IF EXISTS aj3556_nyu_edu.merged_cleaned_2019")
 // spark.sql("DROP TABLE IF EXISTS aes10130_nyu_edu.merged_trips_weather_2019")
 
-month_segments.coalesce(1).write.option("header", "true").mode("overwrite").parquet("hdfs:///user/aj3556_nyu_edu/hw8_dir")
+month_segments.coalesce(1).write.option("header", "true").mode("overwrite").parquet("hdfs:///user/aj3556_nyu_edu/final_project/merged_cleaned")
 month_segments.write.mode("overwrite").saveAsTable("aj3556_nyu_edu.merged_cleaned_2019")
 
-merged_data.coalesce(1).write.option("header", "true").mode("overwrite").parquet("hdfs:///user/aes10130_nyu_edu/final_project/merged_data")
-// merged_data.write.mode("overwrite").saveAsTable("aes10130_nyu_edu.merged_trips_weather_2019")
+month_segments.coalesce(1).write.option("header", "true").mode("overwrite").parquet("hdfs:///user/aes10130_nyu_edu/final_project/merged_data")
+// month_segments.write.mode("overwrite").saveAsTable("aes10130_nyu_edu.merged_trips_weather_2019")
+
