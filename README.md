@@ -93,7 +93,7 @@ spark-submit \
 
 ## Where you can find the input data that we used: 
 - Taxi input data can be found at: `hdfs:///user/aes10130_nyu_edu/final_project/yellow_taxi_raw`.
-- Bike input data can be found at: 
+- Bike input data can be found at: `hdfs:///user/mc9967_nyu_edu/citibike_data`.
 - Weather input data can be found at:
 
 ## How to run our model: 
