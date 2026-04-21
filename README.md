@@ -91,13 +91,10 @@ spark-submit \
 - The merged cleaned dataset is written to `hdfs:///user/aes10130_nyu_edu/final_project/merged_data`.
 - Intermediate and analysis outputs are generally written to user-specific HDFS folders referenced inside each Scala file.
 
-## Where you can find the input data that you used: 
+## Where you can find the input data that we used: 
 - Taxi input data can be found at: `hdfs:///user/aes10130_nyu_edu/final_project/yellow_taxi_raw`.
 - Bike input data can be found at: 
 - Weather input data can be found at:
-
-## How to build/recreate our model: 
-- 
 
 ## How to run our model: 
 - Download the transport_model_local folder and model_viz.ipynb, which are located in the ana_code directory
