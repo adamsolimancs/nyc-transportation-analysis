@@ -23,7 +23,6 @@ plt.title('Taxi vs Citibike Trips by Temperature (NYC 2019)')
 plt.legend()
 plt.grid(True, alpha=0.3)
 plt.tight_layout()
-plt.savefig('taxi_vs_citibike_trips.jpg')
 plt.show()
 
 # avg trip duration by temperature
@@ -42,5 +41,4 @@ plt.title('Weather Impact on Trip Duration (NYC 2019)')
 plt.legend()
 plt.grid(True, alpha=0.3)
 plt.tight_layout()
-plt.savefig('weather_trip_duration.jpg')
 plt.show()
