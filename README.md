@@ -6,7 +6,7 @@ https://data.cityofnewyork.us/dataset/Citi-Bike-System-Data/vsnr-94wk/about_data
 
 https://www.nyc.gov/site/tlc/about/tlc-trip-record-data.page
 
-https://data.cityofnewyork.us/dataset/Hyperlocal-Temperature-Monitoring/qdq3-9eqn/about_data
+https://open-meteo.com/en/docs
 
 ## HDFS File Locations: 
 
@@ -14,11 +14,84 @@ hdfs dfs -ls -d /user/aes10130_nyu_edu/final_project
 
 ## Describe your directories and files, step by step: 
 
-## How to build your code: 
+- `data_ingest/` contains the ingestion jobs used to prepare source datasets before merging.
+- `etl_code/` contains cleaning and merge jobs for the combined transportation + weather dataset.
+- `ana_code/` contains analytic (model training and visualization) code used after cleaning.
+- `profiling_code/` contains record counts, schema checks, and other quick validation scripts.
+- `screenshots/` stores project screenshots by team member for different steps of the pipeline.
+- `weather/`, `bike/`, and `yellow_taxi/` contain earlier dataset-specific cleaning and profiling code from previous hw's.
 
-## How to run your code: 
+## How to build the code: 
+
+This repo does not have a single root build file. Most jobs are standalone Spark Scala programs.
+
+To build one Spark job manually:
+
+1. Make a directory for compiled `.class` files.
+2. Compile the Scala file with the Spark jars on the classpath.
+3. Package the compiled classes into a jar.
+
+Example for `etl_code/adam/Clean_Merged.scala`:
+
+```bash
+mkdir -p etl_code/adam/clean_merged_class_files
+
+scalac \
+  -classpath "$SPARK_HOME/jars/*" \
+  -d etl_code/adam/clean_merged_class_files \
+  etl_code/adam/Clean_Merged.scala
+
+jar cf etl_code/adam/Clean_Merged_classes.jar \
+  -C etl_code/adam/clean_merged_class_files .
+```
+
+Example for `data_ingest/adam/taxi_ingest.scala`:
+
+```bash
+mkdir -p data_ingest/adam/ingest_class_files
+
+scalac \
+  -classpath "$SPARK_HOME/jars/*" \
+  -d data_ingest/adam/ingest_class_files \
+  data_ingest/adam/taxi_ingest.scala
+
+jar cf data_ingest/adam/taxi_ingest_classes.jar \
+  -C data_ingest/adam/ingest_class_files .
+```
+
+## How to run the code: 
+
+To run one Spark job manually after building the jar:
+
+```bash
+spark-submit \
+  --class Clean_Merged \
+  etl_code/adam/Clean_Merged_classes.jar \
+  hdfs:///user/aes10130_nyu_edu/final_project/merged_data \
+  hdfs:///user/aes10130_nyu_edu/final_project/merged_data \
+  hdfs:///user/aes10130_nyu_edu/final_project/merged_data_tmp
+```
+
+```bash
+spark-submit \
+  --class taxi_ingest \
+  data_ingest/adam/taxi_ingest_classes.jar \
+  /user/aes10130_nyu_edu/final_project/yellow_taxi_raw \
+  hdfs:///user/aes10130_nyu_edu/final_project/processed_taxi \
+  hdfs:///user/aes10130_nyu_edu/final_project/taxi_zone_lookup.csv \
+  0
+```
+
 
 ## Where to find results of a run: 
 
-## Where you can find the input data that you used. You must provide access to the HDFS files to the same accounts from previous assignments. 
-Input data can be found at: hdfs dfs -ls -d /user/aes10130_nyu_edu/final_project/merged_data
+- Taxi ingest output defaults to `hdfs:///user/aes10130_nyu_edu/final_project/processed_taxi`.
+- Bike ingest output defaults to `hdfs:///user/aes10130_nyu_edu/final_project/processed_citibike_data`.
+- Weather ingest output defaults to `hdfs:///user/aes10130_nyu_edu/final_project/processed_weather`.
+- The merged cleaned dataset is written to `hdfs:///user/aes10130_nyu_edu/final_project/merged_data`.
+- Intermediate and analysis outputs are generally written to user-specific HDFS folders referenced inside each Scala file.
+
+## Where you can find the input data that you used
+- Taxi input data can be found at: `hdfs:///user/aes10130_nyu_edu/final_project/yellow_taxi_raw`.
+- Bike input data can be found at: 
+- Weather input data can be found at: 
