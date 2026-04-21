@@ -108,13 +108,16 @@ spark-submit \
 Alternatively, to run the model without a visualization, 
 - Download the transport_model_local folder located in the ana_code directory
 - For Spark, load and run the model using the following code:
+```bash
 import org.apache.spark.ml.PipelineModel
 val model = PipelineModel.load("transport_model_local")
 val predictions = model.transform(inputDF)
 predictions.select("prediction").show()
+```
 - For Python, load and run the model using the following code:
+- ```bash
 from pyspark.ml import PipelineModel
 model = PipelineModel.load("transport_model_local")
 predictions = model.transform(inputDF)
 predictions.select("prediction").show()
-
+```
