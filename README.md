@@ -94,7 +94,7 @@ spark-submit \
 ## Where you can find the input data that we used: 
 - Taxi input data can be found at: `hdfs:///user/aes10130_nyu_edu/final_project/yellow_taxi_raw`.
 - Bike input data can be found at: `hdfs:///user/mc9967_nyu_edu/citibike_data`.
-- Weather input data can be found at:
+- Weather input data can be found at: `hdfs:///user/aj3556_nyu_edu/final_project/NYC_Weather_2016_2022.csv`.
 
 ## How to run our model: 
 - Download the transport_model_local folder and model_viz.ipynb, which are located in the ana_code directory
